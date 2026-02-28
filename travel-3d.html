@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Train: Chiang Mai to Phitsanulok</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            background: rgba(10, 15, 30, 0.4);
+            padding: 15px 25px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 204, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 255, 204, 0.1);
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.4rem;
+            color: #00ffcc;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+        }
+
+        p {
+            margin: 0;
+            font-size: 0.95rem;
+            color: #b3d4ff;
+            letter-spacing: 0.5px;
+        }
+
+        footer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            color: #88a;
+            padding: 15px;
+            background: linear-gradient(to top, rgba(10, 15, 30, 0.9) 0%, rgba(10, 15, 30, 0) 100%);
+            font-size: 0.9rem;
+            pointer-events: none;
+            border-top: 1px solid rgba(0, 255, 204, 0.1);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .oracle-name {
+            color: #ff007f;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(255, 0, 127, 0.6);
+        }
+
+        .nav-buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            pointer-events: auto;
+        }
+
+        .btn-2d {
+            background: linear-gradient(135deg, #4da6ff, #ff4da6);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-block;
+        }
+
+        .btn-2d:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="nav-buttons">
+        <a href="index.html" class="btn-2d">🗺️ กลับไปยัง 2D Map</a>
+    </div>
+
+    <div id="info">
+        <h1>3D GPS Route Journey</h1>
+        <p>Chiang Mai ➔ Phitsanulok</p>
+    </div>
+    <footer>&copy; Created by <span class="oracle-name">Oracle: Antigravity</span></footer>
+
+    <script>
+        // Init Scene
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0f0f1a, 0.001);
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+        camera.position.set(0, 80, 150);
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(100, 200, 100);
+        scene.add(dirLight);
+
+        // Add a grid helper for floor effect (Dark Green/Grass tone)
+        const gridHelper = new THREE.GridHelper(5000, 100, 0x224422, 0x112211);
+        gridHelper.position.y = -0.1;
+        gridHelper.material.opacity = 0.3;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        // Enhance fog for realistic depth
+        scene.fog = new THREE.FogExp2(0x11111a, 0.001);
+
+        // Tree Generator Function
+        function createTree() {
+            const group = new THREE.Group();
+
+            // Trunk
+            const trunkGeo = new THREE.CylinderGeometry(0.5, 0.5, 4, 8);
+            const trunkMat = new THREE.MeshPhongMaterial({ color: 0x4d2600 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 2;
+            group.add(trunk);
+
+            // Leaves (Cones)
+            const leafMat = new THREE.MeshPhongMaterial({ color: 0x004d00 });
+            for (let i = 0; i < 3; i++) {
+                const leafGeo = new THREE.ConeGeometry(3 - i * 0.5, 5, 8);
+                const leaf = new THREE.Mesh(leafGeo, leafMat);
+                leaf.position.y = 5 + i * 2.5;
+                group.add(leaf);
+            }
+
+            group.scale.set(1, 1, 1);
+            return group;
+        }
+
+        // Building Generator Function
+        function createBuilding() {
+            const group = new THREE.Group();
+
+            // Randomize building size
+            const w = 4 + Math.random() * 4;
+            const h = 4 + Math.random() * 8;
+            const d = 4 + Math.random() * 4;
+
+            // Body
+            const bodyGeo = new THREE.BoxGeometry(w, h, d);
+            const bodyMat = new THREE.MeshPhongMaterial({ color: 0xcccccc });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = h / 2;
+            group.add(body);
+
+            // Roof
+            const roofGeo = new THREE.ConeGeometry(w * 0.8, 4, 4);
+            roofGeo.rotateY(Math.PI / 4);
+            const roofMat = new THREE.MeshPhongMaterial({ color: 0x663300 });
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = h + 2;
+            group.add(roof);
+
+            // Windows
+            const winMat = new THREE.MeshBasicMaterial({ color: 0xffffaa });
+            for (let i = 0; i < 4; i++) {
+                const winGeo = new THREE.PlaneGeometry(0.8, 0.8);
+                const win = new THREE.Mesh(winGeo, winMat);
+                win.position.set(w / 2 + 0.01, h * 0.6, -d / 2 + (i + 1) * d / 5);
+                win.rotation.y = Math.PI / 2;
+                group.add(win);
+            }
+
+            return group;
+        }
+
+        // Mountain Generator Function
+        function createMountain() {
+            const height = 100 + Math.random() * 200;
+            const radius = 100 + Math.random() * 150;
+            const geo = new THREE.ConeGeometry(radius, height, 4);
+            const mat = new THREE.MeshPhongMaterial({ color: 0x334455 });
+            const mountain = new THREE.Mesh(geo, mat);
+            mountain.position.y = height / 2 - 5;
+            return mountain;
+        }
+
+        // Cloud Generator Function
+        function createCloud() {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+            const count = 3 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < count; i++) {
+                const size = 5 + Math.random() * 10;
+                const geo = new THREE.BoxGeometry(size, size, size);
+                const part = new THREE.Mesh(geo, mat);
+                part.position.set(i * 5, Math.random() * 3, Math.random() * 3);
+                group.add(part);
+            }
+            return group;
+        }
+
+        // Map projection function (Simple local projection)
+        let originLat = null, originLon = null;
+        function latLonToVector3(lat, lon) {
+            if (originLat === null) { originLat = lat; originLon = lon; }
+            const R = 6371; // Earth radius in km
+            // Approximate projection scaled up for Three.js spatial view
+            const x = (lon - originLon) * Math.cos(originLat * Math.PI / 180) * 111.32 * 20;
+            const z = -(lat - originLat) * 111.32 * 20;
+            return new THREE.Vector3(x, 0, z);
+        }
+
+        const csvUrl = './travel-phitsanulok.csv';
+
+        Papa.parse(csvUrl, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function (results) {
+                const data = results.data;
+                const pathPoints = [];
+
+                data.forEach(row => {
+                    const lat = parseFloat(row.lat);
+                    const lon = parseFloat(row.lon);
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        pathPoints.push(latLonToVector3(lat, lon));
+                    }
+                });
+
+                if (pathPoints.length === 0) return;
+
+                // Create Path Curve
+                const curve = new THREE.CatmullRomCurve3(pathPoints);
+                const points = curve.getPoints(1000);
+
+                // Draw Neon Line Route
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: 0x00ffcc,
+                    linewidth: 3,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                const routeLine = new THREE.Line(lineGeometry, lineMaterial);
+                scene.add(routeLine);
+
+                // Add Glowing Point Particles
+                const pointsGeometry = new THREE.BufferGeometry().setFromPoints(pathPoints);
+
+                // Create custom circular texture for glowing particles
+                const canvas = document.createElement('canvas');
+                canvas.width = 16;
+                canvas.height = 16;
+                const context = canvas.getContext('2d');
+                const gradient = context.createRadialGradient(8, 8, 0, 8, 8, 8);
+                gradient.addColorStop(0, 'rgba(255, 0, 127, 1)');
+                gradient.addColorStop(0.2, 'rgba(255, 0, 127, 1)');
+                gradient.addColorStop(0.4, 'rgba(255, 0, 127, 0.8)');
+                gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                context.fillStyle = gradient;
+                context.fillRect(0, 0, 16, 16);
+                const texture = new THREE.CanvasTexture(canvas);
+
+                const pointsMaterial = new THREE.PointsMaterial({
+                    color: 0xffffff,
+                    size: 4,
+                    map: texture,
+                    transparent: true,
+                    opacity: 0.5,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+                const mapPoints = new THREE.Points(pointsGeometry, pointsMaterial);
+                scene.add(mapPoints);
+
+                // Add Realistic Trees along the path
+                const treeCount = 600;
+                for (let i = 0; i < treeCount; i++) {
+                    const tree = createTree();
+                    const pathIndex = Math.floor(Math.random() * pathPoints.length);
+                    const basePos = pathPoints[pathIndex];
+
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 20 + Math.random() * 100;
+                    tree.position.set(
+                        basePos.x + Math.cos(angle) * distance,
+                        0,
+                        basePos.z + Math.sin(angle) * distance
+                    );
+
+                    const s = 0.5 + Math.random() * 1.5;
+                    tree.scale.set(s, s, s);
+                    scene.add(tree);
+                }
+
+                // Add Buildings in clusters
+                const buildingCount = 50;
+                for (let i = 0; i < buildingCount; i++) {
+                    const building = createBuilding();
+                    // Place near waypoints
+                    const pathIndex = Math.floor(Math.random() * pathPoints.length);
+                    const basePos = pathPoints[pathIndex];
+
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 20 + Math.random() * 40;
+                    building.position.set(
+                        basePos.x + Math.cos(angle) * distance,
+                        0,
+                        basePos.z + Math.sin(angle) * distance
+                    );
+                    building.rotation.y = Math.random() * Math.PI;
+                    scene.add(building);
+                }
+
+                // Add Mountains in the far background
+                for (let i = 0; i < 30; i++) {
+                    const mountain = createMountain();
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 1000 + Math.random() * 500;
+                    mountain.position.set(Math.cos(angle) * distance, 0, Math.sin(angle) * distance);
+                    scene.add(mountain);
+                }
+
+                // Add Clouds
+                for (let i = 0; i < 100; i++) {
+                    const cloud = createCloud();
+                    cloud.position.set(
+                        (Math.random() - 0.5) * 3000,
+                        100 + Math.random() * 100,
+                        (Math.random() - 0.5) * 3000
+                    );
+                    scene.add(cloud);
+                }
+
+                // Create Realistic Train Model
+                const trainGroup = new THREE.Group();
+
+                // Materials
+                const metalMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
+                const redMat = new THREE.MeshStandardMaterial({ color: 0xaa0000, metalness: 0.5 });
+                const windowMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 });
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+                // Main Carriage
+                function createCarriage(isHead = false) {
+                    const carriage = new THREE.Group();
+
+                    // Body
+                    const bodyGeo = new THREE.BoxGeometry(4, 4, 12);
+                    const body = new THREE.Mesh(bodyGeo, isHead ? redMat : metalMat);
+                    body.position.y = 2.5;
+                    carriage.add(body);
+
+                    // Roof (Curved look)
+                    const roofGeo = new THREE.CylinderGeometry(2, 2, 12, 16, 1, false, 0, Math.PI);
+                    roofGeo.rotateX(Math.PI / 2);
+                    const roof = new THREE.Mesh(roofGeo, isHead ? redMat : metalMat);
+                    roof.position.y = 4.5;
+                    carriage.add(roof);
+
+                    // Windows
+                    for (let i = 0; i < 4; i++) {
+                        const winGeo = new THREE.BoxGeometry(0.1, 1.5, 2);
+                        const winL = new THREE.Mesh(winGeo, windowMat);
+                        const winR = new THREE.Mesh(winGeo, windowMat);
+                        winL.position.set(-2.05, 3, -4 + i * 2.5);
+                        winR.position.set(2.05, 3, -4 + i * 2.5);
+                        carriage.add(winL, winR);
+                    }
+
+                    // Wheels
+                    const wheelGeo = new THREE.CylinderGeometry(0.8, 0.8, 1, 16);
+                    wheelGeo.rotateZ(Math.PI / 2);
+                    for (let i = 0; i < 2; i++) {
+                        for (let j = 0; j < 2; j++) {
+                            const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                            wheel.position.set(0, 0.8, (i === 0 ? 4 : -4) + (j === 0 ? 1 : -1));
+                            carriage.add(wheel);
+                        }
+                    }
+
+                    if (isHead) {
+                        // Nose / Cab
+                        const noseGeo = new THREE.BoxGeometry(3.5, 3, 2);
+                        const nose = new THREE.Mesh(noseGeo, redMat);
+                        nose.position.set(0, 2.5, 7);
+                        carriage.add(nose);
+
+                        // Headlight
+                        const lightGeo = new THREE.CircleGeometry(0.5, 16);
+                        const headlight = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+                        headlight.position.set(0, 2.5, 8.01);
+                        carriage.add(headlight);
+
+                        const spot = new THREE.SpotLight(0xffffff, 10, 300, Math.PI / 6);
+                        spot.position.set(0, 3, 8);
+                        spot.target.position.set(0, 3, 50);
+                        carriage.add(spot, spot.target);
+                    }
+
+                    return carriage;
+                }
+
+                // Assemble Train (Locomotive + 2 Wagons)
+                const locomotive = createCarriage(true);
+                trainGroup.add(locomotive);
+
+                const wagon1 = createCarriage(false);
+                wagon1.position.z = -13;
+                trainGroup.add(wagon1);
+
+                const wagon2 = createCarriage(false);
+                wagon2.position.z = -26;
+                trainGroup.add(wagon2);
+
+                trainGroup.scale.set(1.5, 1.5, 1.5);
+                scene.add(trainGroup);
+
+                // Adjust Camera to View Path
+                const centerPoint = new THREE.Vector3();
+                curve.getPointAt(0.5, centerPoint);
+                camera.position.set(centerPoint.x, 150, centerPoint.z + 150);
+                controls.target.copy(centerPoint);
+
+                // Animation Engine
+                let progress = 0;
+                const speed = 0.0003; // Adjust speed here
+
+                // Setup Initial Camera Flag
+                let initialCameraSet = false;
+
+                function animate() {
+                    requestAnimationFrame(animate);
+
+                    // Update Train Position and Rotation
+                    progress = (progress + speed) % 1;
+                    const pos = curve.getPointAt(progress);
+                    const tangent = curve.getTangentAt(progress).normalize();
+
+                    trainGroup.position.copy(pos);
+
+                    // Calculate rotation angle
+                    const axis = new THREE.Vector3(0, 1, 0);
+                    const angle = Math.atan2(tangent.x, tangent.z);
+                    trainGroup.rotation.y = angle;
+
+                    // Dynamic Third-Person Camera (Drone View)
+                    // Offset camera position: Behind and slightly above the train
+                    const cameraOffset = new THREE.Vector3(
+                        -tangent.x * 60,  // Move back along the path reversed
+                        30,               // Move up
+                        -tangent.z * 60
+                    );
+
+                    const targetCameraPos = pos.clone().add(cameraOffset);
+
+                    // Smooth Damping for Camera Position
+                    if (!initialCameraSet) {
+                        camera.position.copy(targetCameraPos);
+                        initialCameraSet = true;
+                    } else {
+                        camera.position.lerp(targetCameraPos, 0.05);
+                    }
+
+                    // Look slightly ahead of the train
+                    const lookAheadPoint = curve.getPointAt((progress + 0.01) % 1);
+                    controls.target.lerp(lookAheadPoint, 0.1);
+
+                    controls.update();
+                    renderer.render(scene, camera);
+                }
+
+                animate();
+            }
+        });
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Map: Chiang Mai to Phitsanulok</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #map {
+            flex: 1;
+            width: 100%;
+        }
+
+        footer {
+            background-color: #1e1e1e;
+            padding: 12px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #aaaaaa;
+            border-top: 1px solid #333;
+            letter-spacing: 0.5px;
+        }
+
+        .oracle-name {
+            color: #4da6ff;
+            font-weight: 600;
+        }
+
+        /* Dark Theme Popup Styling */
+        .leaflet-popup-content-wrapper {
+            background: #2a2a2a;
+            color: #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .leaflet-popup-tip {
+            background: #2a2a2a;
+        }
+
+        .leaflet-popup-content {
+            margin: 12px 16px;
+            line-height: 1.6;
+            font-family: inherit;
+        }
+
+        .popup-title {
+            font-weight: bold;
+            color: #4da6ff;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+            border-bottom: 1px solid #444;
+            padding-bottom: 4px;
+        }
+
+        .popup-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .nav-buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .btn-3d {
+            background: linear-gradient(135deg, #ff4da6, #4da6ff);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-block;
+        }
+
+        .btn-3d:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+        }
+
+        /* Animated Pulse Marker */
+        .pulse-icon {
+            border-radius: 50%;
+            box-shadow: 0 0 0 rgba(255, 77, 166, 0.4);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(var(--marker-color), 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(var(--marker-color), 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(var(--marker-color), 0);
+            }
+        }
+
+        /* Train Icon Styling */
+        .train-icon {
+            font-size: 24px;
+            filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
+            transition: all 0.05s linear;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="nav-buttons">
+        <a href="travel-3d.html" class="btn-3d">🚂 ดูแบบ 3D Train</a>
+    </div>
+
+    <div id="map"></div>
+    <footer>
+        &copy; Created by <span class="oracle-name">Oracle: Antigravity</span>
+    </footer>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([18.7883, 98.9853], 8); // Default start around Chiang Mai
+
+        // Add Dark Theme Tile Layer (CartoDB Dark Matter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        // Fetch and parse CSV directly from the URL
+        const csvUrl = './travel-phitsanulok.csv';
+
+        Papa.parse(csvUrl, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function (results) {
+                const data = results.data;
+                const latlngs = [];
+
+                // Process each row of the CSV data
+                data.forEach(row => {
+                    const lat = parseFloat(row.lat);
+                    const lon = parseFloat(row.lon);
+
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        latlngs.push([lat, lon]);
+
+                        // Extract required info for the popup
+                        const place = row.place || row.locality || row.address || 'Unknown Location';
+                        let time = 'Unknown time';
+                        if (row.updated) {
+                            try {
+                                time = new Date(row.updated).toLocaleString('th-TH', {
+                                    year: 'numeric', month: 'short', day: 'numeric',
+                                    hour: '2-digit', minute: '2-digit'
+                                });
+                            } catch (e) { time = row.updated; }
+                        }
+
+                        let batteryValue = parseInt(row.battery);
+                        const battery = isNaN(batteryValue) ? 'N/A' : `${batteryValue}%`;
+
+                        // Custom color logic based on battery
+                        let markerColor = "#ff4da6"; // Default pinkish
+                        let rgbColor = "255, 77, 166";
+                        if (!isNaN(batteryValue)) {
+                            if (batteryValue > 70) { markerColor = "#00e676"; rgbColor = "0, 230, 118"; }      // Green
+                            else if (batteryValue > 30) { markerColor = "#ffeb3b"; rgbColor = "255, 235, 59"; } // Yellow
+                            else { markerColor = "#f44336"; rgbColor = "244, 67, 54"; }                       // Red
+                        }
+
+                        // Build popup HTML content
+                        const popupContent = `
+                            <div class="popup-title">${place}</div>
+                            <div class="popup-info">
+                                <span class="popup-icon">🕒</span> 
+                                <span>${time}</span>
+                            </div>
+                            <div class="popup-info">
+                                <span class="popup-icon">🔋</span> 
+                                <span style="color: ${markerColor}; font-weight: bold;">${battery} ${row.charging === 'true' ? '⚡' : ''}</span>
+                            </div>
+                        `;
+
+                        // Add custom animated marker (DivIcon)
+                        const customIcon = L.divIcon({
+                            className: 'pulse-icon',
+                            html: `<div style="width: 12px; height: 12px; background-color: ${markerColor}; border-radius: 50%; border: 2px solid white; --marker-color: ${rgbColor}"></div>`,
+                            iconSize: [16, 16],
+                            iconAnchor: [8, 8]
+                        });
+
+                        const marker = L.marker([lat, lon], { icon: customIcon }).addTo(map);
+
+                        marker.bindPopup(popupContent);
+                    }
+                });
+
+                // Draw a line connecting the points chronologically
+                if (latlngs.length > 0) {
+                    const polyline = L.polyline(latlngs, {
+                        color: '#4da6ff',
+                        weight: 3,
+                        opacity: 0.8,
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    }).addTo(map);
+
+                    // Zoom and pan map to perfectly fit the entire route
+                    map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+
+                    // Add Animated Train
+                    const trainIcon = L.divIcon({
+                        className: 'train-icon',
+                        html: '🚂',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    });
+
+                    const trainMarker = L.marker(latlngs[0], {
+                        icon: trainIcon,
+                        zIndexOffset: 1000 // Ensure train is above other markers
+                    }).addTo(map);
+
+                    let progressIndex = 0;
+                    setInterval(() => {
+                        progressIndex = (progressIndex + 1) % latlngs.length;
+                        trainMarker.setLatLng(latlngs[progressIndex]);
+                    }, 50); // Speed of the train (lower is faster)
+                }
+            },
+            error: function (err) {
+                console.error("Error parsing CSV:", err);
+                alert("Failed to load GPS travel data.");
+            }
+        });
+    </script>
+</body>
+
+</html>
