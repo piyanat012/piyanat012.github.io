@@ -4,268 +4,357 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Travel Map: Chiang Mai to Phitsanulok</title>
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-    <!-- PapaParse for CSV parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <title>Dustboy Elite | Next-Gen Air Quality Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
-        body,
-        html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            background-color: #121212;
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent-primary: #00f2fe;
+            --accent-secondary: #4facfe;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #050505;
             color: #ffffff;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            display: flex;
-            flex-direction: column;
+            margin: 0;
+            overflow-x: hidden;
         }
 
-        #map {
-            flex: 1;
-            width: 100%;
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
         }
 
-        footer {
-            background-color: #1e1e1e;
-            padding: 12px;
-            text-align: center;
-            font-size: 0.9em;
-            color: #aaaaaa;
-            border-top: 1px solid #333;
-            letter-spacing: 0.5px;
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .oracle-name {
-            color: #4da6ff;
-            font-weight: 600;
+        .glass-card:hover {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.15);
+            transform: translateY(-5px);
         }
 
-        /* Dark Theme Popup Styling */
-        .leaflet-popup-content-wrapper {
-            background: #2a2a2a;
-            color: #e0e0e0;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .leaflet-popup-tip {
-            background: #2a2a2a;
+        .stat-value {
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1;
         }
 
-        .leaflet-popup-content {
-            margin: 12px 16px;
-            line-height: 1.6;
-            font-family: inherit;
-        }
-
-        .popup-title {
-            font-weight: bold;
-            color: #4da6ff;
-            margin-bottom: 8px;
-            font-size: 1.1em;
-            border-bottom: 1px solid #444;
-            padding-bottom: 4px;
-        }
-
-        .popup-info {
-            display: flex;
-            align-items: center;
-            margin-bottom: 4px;
-        }
-
-        .nav-buttons {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-        }
-
-        .btn-3d {
-            background: linear-gradient(135deg, #ff4da6, #4da6ff);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-family: inherit;
-            cursor: pointer;
-            text-decoration: none;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: inline-block;
-        }
-
-        .btn-3d:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
-        }
-
-        /* Animated Pulse Marker */
-        .pulse-icon {
+        .pulse-dot {
+            width: 12px;
+            height: 12px;
+            background: #10b981;
             border-radius: 50%;
-            box-shadow: 0 0 0 rgba(255, 77, 166, 0.4);
+            display: inline-block;
+            box-shadow: 0 0 10px #10b981;
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
             0% {
-                box-shadow: 0 0 0 0 rgba(var(--marker-color), 0.7);
+                transform: scale(1);
+                opacity: 1;
             }
 
-            70% {
-                box-shadow: 0 0 0 10px rgba(var(--marker-color), 0);
+            50% {
+                transform: scale(1.5);
+                opacity: 0.5;
             }
 
             100% {
-                box-shadow: 0 0 0 0 rgba(var(--marker-color), 0);
+                transform: scale(1);
+                opacity: 1;
             }
         }
 
-        /* Train Icon Styling */
-        .train-icon {
-            font-size: 24px;
-            filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
-            transition: all 0.05s linear;
+        .scroll-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 10px;
         }
     </style>
 </head>
 
-<body>
+<body class="min-h-screen">
+    <canvas id="bg-canvas"></canvas>
 
-    <div class="nav-buttons">
-        <a href="travel-3d.html" class="btn-3d">🚂 ดูแบบ 3D Train</a>
-    </div>
+    <nav class="p-6 flex justify-between items-center relative z-10">
+        <div class="flex items-center gap-3">
+            <div
+                class="w-10 h-10 bg-gradient-to-br from-[#00f2fe] to-[#4facfe] rounded-xl flex items-center justify-center font-bold text-xl">
+                D</div>
+            <span class="text-xl font-bold tracking-tight">DUSTBOY <span class="gradient-text">ELITE</span></span>
+        </div>
+        <div class="flex items-center gap-4">
+            <div id="connection-status" class="flex items-center gap-2 glass-card px-4 py-2 text-sm">
+                <span class="pulse-dot"></span>
+                <span id="status-text">CONNECTING...</span>
+            </div>
+        </div>
+    </nav>
 
-    <div id="map"></div>
-    <footer>
-        &copy; Created by <span class="oracle-name">Oracle: Antigravity</span>
-    </footer>
+    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
+        <!-- Main Stats -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="glass-card p-8 relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-8 opacity-10">
+                    <svg width="150" height="150" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5zm4 4h-2v-5h2v5zm0-7h-2V7h2v2z" />
+                    </svg>
+                </div>
+                <h2 class="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-4">Live Air Quality</h2>
+                <div class="flex items-end gap-1">
+                    <span id="pm25-value" class="stat-value">--</span>
+                    <span class="text-2xl font-semibold mb-2 ml-2">µg/m³</span>
+                </div>
+                <p class="text-xl text-gray-300 font-medium">PM2.5 Concentration</p>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+                <div class="grid grid-cols-2 gap-4 mt-8">
+                    <div class="bg-white/5 rounded-2xl p-4">
+                        <span class="text-xs text-gray-400 uppercase">PM10</span>
+                        <div class="text-2xl font-bold" id="pm10-value">--</div>
+                    </div>
+                    <div class="bg-white/5 rounded-2xl p-4">
+                        <span class="text-xs text-gray-400 uppercase">Temp / Hum</span>
+                        <div class="text-2xl font-bold"><span id="temp-value">--</span>°C / <span
+                                id="hum-value">--</span>%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card p-6">
+                <h3 class="text-lg font-bold mb-4">Real-time Visualization</h3>
+                <div class="h-[300px] w-full">
+                    <canvas id="mainChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar / Feed -->
+        <div class="space-y-6">
+            <div class="glass-card p-6 h-full flex flex-col">
+                <h3 class="text-lg font-bold mb-4 flex justify-between">
+                    Device Feed
+                    <span class="text-xs font-normal text-gray-400" id="topic-count">0 stations</span>
+                </h3>
+                <div id="device-list" class="space-y-3 overflow-y-auto max-h-[600px] scroll-container flex-grow pr-2">
+                    <!-- Devices will be injected here -->
+                    <div class="text-center py-20 text-gray-500 italic">Waiting for data...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
     <script>
-        // Initialize map
-        const map = L.map('map').setView([18.7883, 98.9853], 8); // Default start around Chiang Mai
+        // --- THREE.JS BACKGROUND ---
+        const setupBackground = () => {
+            const canvas = document.querySelector('#bg-canvas');
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
 
-        // Add Dark Theme Tile Layer (CartoDB Dark Matter)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 20
-        }).addTo(map);
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
 
-        // Fetch and parse CSV directly from the URL
-        const csvUrl = './travel-phitsanulok.csv';
+            // Particles
+            const particlesGeometry = new THREE.BufferGeometry();
+            const particlesCount = 5000;
+            const posArray = new Float32Array(particlesCount * 3);
 
-        Papa.parse(csvUrl, {
-            download: true,
-            header: true,
-            skipEmptyLines: true,
-            complete: function (results) {
-                const data = results.data;
-                const latlngs = [];
-
-                // Process each row of the CSV data
-                data.forEach(row => {
-                    const lat = parseFloat(row.lat);
-                    const lon = parseFloat(row.lon);
-
-                    if (!isNaN(lat) && !isNaN(lon)) {
-                        latlngs.push([lat, lon]);
-
-                        // Extract required info for the popup
-                        const place = row.place || row.locality || row.address || 'Unknown Location';
-                        let time = 'Unknown time';
-                        if (row.updated) {
-                            try {
-                                time = new Date(row.updated).toLocaleString('th-TH', {
-                                    year: 'numeric', month: 'short', day: 'numeric',
-                                    hour: '2-digit', minute: '2-digit'
-                                });
-                            } catch (e) { time = row.updated; }
-                        }
-
-                        let batteryValue = parseInt(row.battery);
-                        const battery = isNaN(batteryValue) ? 'N/A' : `${batteryValue}%`;
-
-                        // Custom color logic based on battery
-                        let markerColor = "#ff4da6"; // Default pinkish
-                        let rgbColor = "255, 77, 166";
-                        if (!isNaN(batteryValue)) {
-                            if (batteryValue > 70) { markerColor = "#00e676"; rgbColor = "0, 230, 118"; }      // Green
-                            else if (batteryValue > 30) { markerColor = "#ffeb3b"; rgbColor = "255, 235, 59"; } // Yellow
-                            else { markerColor = "#f44336"; rgbColor = "244, 67, 54"; }                       // Red
-                        }
-
-                        // Build popup HTML content
-                        const popupContent = `
-                            <div class="popup-title">${place}</div>
-                            <div class="popup-info">
-                                <span class="popup-icon">🕒</span> 
-                                <span>${time}</span>
-                            </div>
-                            <div class="popup-info">
-                                <span class="popup-icon">🔋</span> 
-                                <span style="color: ${markerColor}; font-weight: bold;">${battery} ${row.charging === 'true' ? '⚡' : ''}</span>
-                            </div>
-                        `;
-
-                        // Add custom animated marker (DivIcon)
-                        const customIcon = L.divIcon({
-                            className: 'pulse-icon',
-                            html: `<div style="width: 12px; height: 12px; background-color: ${markerColor}; border-radius: 50%; border: 2px solid white; --marker-color: ${rgbColor}"></div>`,
-                            iconSize: [16, 16],
-                            iconAnchor: [8, 8]
-                        });
-
-                        const marker = L.marker([lat, lon], { icon: customIcon }).addTo(map);
-
-                        marker.bindPopup(popupContent);
-                    }
-                });
-
-                // Draw a line connecting the points chronologically
-                if (latlngs.length > 0) {
-                    const polyline = L.polyline(latlngs, {
-                        color: '#4da6ff',
-                        weight: 3,
-                        opacity: 0.8,
-                        lineCap: 'round',
-                        lineJoin: 'round'
-                    }).addTo(map);
-
-                    // Zoom and pan map to perfectly fit the entire route
-                    map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
-
-                    // Add Animated Train
-                    const trainIcon = L.divIcon({
-                        className: 'train-icon',
-                        html: '🚂',
-                        iconSize: [24, 24],
-                        iconAnchor: [12, 12]
-                    });
-
-                    const trainMarker = L.marker(latlngs[0], {
-                        icon: trainIcon,
-                        zIndexOffset: 1000 // Ensure train is above other markers
-                    }).addTo(map);
-
-                    let progressIndex = 0;
-                    setInterval(() => {
-                        progressIndex = (progressIndex + 1) % latlngs.length;
-                        trainMarker.setLatLng(latlngs[progressIndex]);
-                    }, 50); // Speed of the train (lower is faster)
-                }
-            },
-            error: function (err) {
-                console.error("Error parsing CSV:", err);
-                alert("Failed to load GPS travel data.");
+            for (let i = 0; i < particlesCount * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 15;
             }
+
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const particlesMaterial = new THREE.PointsMaterial({
+                size: 0.015,
+                color: '#4facfe',
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+
+            const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+            scene.add(particlesMesh);
+
+            // Lighting
+            const light = new THREE.PointLight(0xffffff, 1);
+            light.position.set(5, 5, 5);
+            scene.add(light);
+
+            const animate = () => {
+                requestAnimationFrame(animate);
+                particlesMesh.rotation.y += 0.001;
+                particlesMesh.rotation.x += 0.0005;
+
+                // Mouse interaction effect could go here
+
+                renderer.render(scene, camera);
+            };
+
+            animate();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        };
+
+        // --- CHART SETUP ---
+        let mainChart;
+        const setupChart = () => {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            mainChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'PM2.5',
+                        borderColor: '#00f2fe',
+                        backgroundColor: 'rgba(0, 242, 254, 0.1)',
+                        data: [],
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#888' }
+                        }
+                    }
+                }
+            });
+        };
+
+        // --- MQTT LOGIC ---
+        const stations = new Map();
+        const MAX_DATA_POINTS = 50;
+
+        const connectMQTT = () => {
+            const client = mqtt.connect('wss://dustboy-wss-bridge.laris.workers.dev/mqtt');
+            const statusText = document.getElementById('status-text');
+            const pulseDot = document.querySelector('.pulse-dot');
+
+            client.on('connect', () => {
+                statusText.innerText = 'LIVE CONNECTED';
+                pulseDot.style.background = '#10b981';
+                pulseDot.style.boxShadow = '0 0 10px #10b981';
+                client.subscribe('DUSTBOY/+/+/+/status');
+            });
+
+            client.on('message', (topic, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    updateUI(topic, data);
+                } catch (e) {
+                    console.error('Data error:', e);
+                }
+            });
+
+            client.on('error', () => {
+                statusText.innerText = 'CONNECTION ERROR';
+                pulseDot.style.background = '#ef4444';
+                pulseDot.style.boxShadow = '0 0 10px #ef4444';
+            });
+        };
+
+        const updateUI = (topic, data) => {
+            // Update main big card if it's new or just use the latest
+            document.getElementById('pm25-value').innerText = data.pm25;
+            document.getElementById('pm10-value').innerText = data.pm10;
+            document.getElementById('temp-value').innerText = data.temp || '--';
+            document.getElementById('hum-value').innerText = data.hum || '--';
+
+            // Chart update
+            const now = new Date().toLocaleTimeString();
+            mainChart.data.labels.push(now);
+            mainChart.data.datasets[0].data.push(data.pm25);
+
+            if (mainChart.data.labels.length > MAX_DATA_POINTS) {
+                mainChart.data.labels.shift();
+                mainChart.data.datasets[0].data.shift();
+            }
+            mainChart.update('none');
+
+            // Device list update
+            stations.set(topic, data);
+            renderDeviceList();
+        };
+
+        const renderDeviceList = () => {
+            const container = document.getElementById('device-list');
+            const topicCount = document.getElementById('topic-count');
+            topicCount.innerText = `${stations.size} active stations`;
+
+            let html = '';
+            // Get last 10 unique stations
+            const sortedStations = Array.from(stations.keys()).reverse().slice(0, 15);
+
+            sortedStations.forEach(topic => {
+                const data = stations.get(topic);
+                const nickname = topic.split('/')[2] || 'Station';
+
+                const pm25Color = data.pm25 > 50 ? 'text-red-400' : (data.pm25 > 25 ? 'text-yellow-400' : 'text-green-400');
+
+                html += `
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-white/20 transition-all">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="text-xs text-gray-500 font-mono truncate w-40">${topic}</div>
+                                <div class="font-bold">${nickname}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xl font-black ${pm25Color}">${data.pm25}</div>
+                                <div class="text-[10px] text-gray-500 uppercase">µg/m³</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        };
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            setupBackground();
+            setupChart();
+            connectMQTT();
         });
     </script>
 </body>
 
-</html>   
- 
+</html>
